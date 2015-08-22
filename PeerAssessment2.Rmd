@@ -1,8 +1,10 @@
 ---
-title: "Reproducible Research: Peer Assessment 2"
+title: 'Reproducible Research: Peer Assessment 2'
 author: "Benjamin Sila"
 date: "Friday, August 21, 2015"
-output: html_document
+output:
+  html_document:
+    keep_md: yes
 ---
 
 ##### This project involves exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage. This project analyzes the effects of Storms and other severe weather events which cause both public health and economic problems for communities and municipalities. Many severe events can result in fatalities, injuries, and property damage, and preventing such outcomes to the extent possible is a key concern.
