@@ -1,0 +1,193 @@
+---
+title: "Reproducible Research: Peer Assessment 2"
+author: "Benjamin Sila"
+date: "Friday, August 21, 2015"
+output: html_document
+---
+
+##### This project involves exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage. This project analyzes the effects of Storms and other severe weather events which cause both public health and economic problems for communities and municipalities. Many severe events can result in fatalities, injuries, and property damage, and preventing such outcomes to the extent possible is a key concern.
+
+The analysis aims to answer these two questions:
+
++ Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?
++ Across the United States, which types of events have the greatest economic consequences?
+
+### Data Processing
+
+- Load the required libraries:
+
+```{r echo=TRUE}
+echo = TRUE  # Always make code visible
+options(scipen = 1)  # Turn off scientific notations for numbers
+library(utils)
+library(ggplot2)
+library(plyr)
+require(gridExtra)
+library(reshape2)
+```
+
+- The data for this assignment comes in the form of a comma-separated-value file compressed via the bzip2 algorithm to reduce its size and has been downloaded in the working directory.
+
+```{r echo=TRUE}
+#download the data
+download.file("https://d396qusza40orc.cloudfront.net/repdata-data-StormData.csv.bz2", destfile = "/data/repdata-data-StormData.csv.bz2", method = "curl")
+```
+
+- Assumption is that the zip (compressed) data file has been downloaded and placed in the working directory.
+- Read the data from the working directory.
+
+```{r}
+rawdata <- read.csv(bzfile("data/repdata_data_StormData.csv.bz2"), header = TRUE, stringsAsFactors = FALSE)
+```
+
+```{r echo=TRUE}
+dim(rawdata)
+```
+There are **902297** rows and **37** columns in total.
+
+
+```{r echo=TRUE}
+if (dim(rawdata)[2] == 37) {
+rawdata$year <- as.numeric(format(as.Date(rawdata$BGN_DATE, format = "%m/%d/%Y %H:%M:%S"), "%Y"))
+}
+hist(rawdata$year, 
+     breaks = 30,
+     col = "purple")
+```
+
+#### Normalizing the data.
+
+convert the data to lower case
+```{r echo=TRUE}
+colnames(rawdata) <- tolower(colnames(rawdata))
+rawdata$evtype <- tolower(rawdata$evtype)
+rawdata$cropdmgexp <- tolower(rawdata$cropdmgexp)
+rawdata$propdmgexp <- tolower(rawdata$propdmgexp)
+```
+
+##### set the multiplier e.g. h is *100, k is *1000 etc.
+```{r echo=TRUE}
+rawdata$cropdmgmag <- 1
+rawdata$cropdmgmag[rawdata$cropdmgexp == 'h'] <- 1e2
+rawdata$cropdmgmag[rawdata$cropdmgexp == 'k'] <- 1e3
+rawdata$cropdmgmag[rawdata$cropdmgexp == 'm'] <- 1e6
+rawdata$cropdmgmag[rawdata$cropdmgexp == 'b'] <- 1e9
+
+rawdata$propdmgmag <- 1
+rawdata$propdmgmag[rawdata$propdmgexp == 'h'] <- 1e2
+rawdata$propdmgmag[rawdata$propdmgexp == 'k'] <- 1e3
+rawdata$propdmgmag[rawdata$propdmgexp == 'm'] <- 1e6
+rawdata$propdmgmag[rawdata$propdmgexp == 'b'] <- 1e9
+
+#get the damage value by applying multiplier
+rawdata$cropdmgval <- rawdata$cropdmg * rawdata$cropdmgmag
+rawdata$propdmgval <- rawdata$propdmg * rawdata$propdmgmag
+```
+
+Unique events in the dataset.
+```{r echo=TRUE}
+unique(rawdata$evtype)[1:25]
+
+```
+
+- How does the data look like?
+
+```{r echo=TRUE}
+# summary(rawdata) # Uncomment the summary output
+head(rawdata, n = 3)
+```
+
+
+## Results
+Aggregate the data to form complete dataset.
+
+```{r echo=TRUE}
+newStormData <- aggregate(cbind(injuries, fatalities, cropdmgval, propdmgval) ~ evtype, rawdata, sum)
+```
+
+### Public Health Impact
+
+```{r echo=TRUE}
+#calculate the health impact (incl. injuries and fatalities) due to storms
+newStormData$hlthdmg <- newStormData$injuries   + newStormData$fatalities
+```
+
+
+```{r echo=TRUE}
+public_health_impact_data <- newStormData[order(newStormData$hlthdmg, 
+                                                decreasing = TRUE), 
+                                                c('evtype', 'injuries', 'fatalities', 'hlthdmg')]
+major_health_impact <- public_health_impact_data[1:10,]
+```
+
+
+### Economic Impact
+
+```{r echo=TRUE}
+#calculate economic impact (incl. crop and property damage) due to storms
+newStormData$econdmg <- newStormData$cropdmgval + newStormData$propdmgval
+```
+
+
+```{r echo=TRUE}
+economic_impact_data <- newStormData[order(newStormData$econdmg, 
+                                        decreasing = TRUE), 
+                                        c('evtype', 'cropdmgval', 'propdmgval', 'econdmg')]
+major_economic_impact <- economic_impact_data[1:10,]
+```
+
+
+```{r echo=TRUE}
+# breakdown by evtype and variable,value pair.
+
+major_health_impact <- major_health_impact[, -4]
+major_economic_impact <- major_economic_impact[, -4]
+
+major_health_impact <- melt(major_health_impact, id.vars = 'evtype', variable.name = 'dmgctgry')
+major_economic_impact <- melt(major_economic_impact, id.vars = 'evtype', variable.name = 'dmgctgry')
+```
+
+
+View the Health Impact Data
+```{r echo=TRUE}
+str(major_health_impact)
+```
+
+View the Economic Impact Data
+```{r echo=TRUE}
+str(major_economic_impact)
+```
+
+
+#### Intepreting the results
+Events (as indicated in the EVTYPE variable) most harmful with respect to population health.
+
+```{r echo=TRUE}
+ggplot(major_health_impact, 
+        aes(x = reorder(evtype, value), y = value, fill = dmgctgry)) + 
+        geom_bar(stat = "identity", position = "stack") + 
+        labs(title = 'Health Impacting Weather Events',
+        color = "black",
+        x = 'Weather Events', 
+        y = 'Most Health Impact | Health Damage (in thousands)') + coord_flip() 
+```
+
+Events have the greatest economic consequences.
+
+```{r echo=TRUE}
+ggplot(major_economic_impact, 
+        aes(x = reorder(evtype, value), y = value, fill = dmgctgry)) + 
+        geom_bar(stat = "identity", position = "stack") + 
+        labs(title = 'Health Impacting Weather Events', 
+        color = "black",
+        x = 'Weather Events', 
+        y = 'Most Economic Impact | Property and Crop Damage (in thousands)') + coord_flip() 
+```
+
+```{r echo=TRUE}
+economic_impact_data[1:5,]
+```
+
+Floods have the greatest economic damage of all weather events accounting for a total economic damage of **150,319,678,257** USD
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
